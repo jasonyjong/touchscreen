@@ -21,6 +21,10 @@ IplImage* GetThresholdedImage(IplImage* img, CvScalar minHSV, CvScalar maxHSV) {
 	return imgThreshed;
 }
 
+int Area(cv::Rect r) {
+	return abs(r.tl().x-r.br().x)*abs(r.tl().y-r.br().y);
+}
+
 void colorTracking() {
 	CvCapture* capture = cvCaptureFromCAM( 0 );
 	if ( !capture ) {
@@ -106,18 +110,27 @@ void colorTracking() {
 			for (int j=0; j<clusterRect.size(); j++) {
 				cv::Rect rmod;
 				if (Combine(rmod, r, clusterRect[j])) {
+					printf("REMOVED\n");
 					clusterRect.erase(clusterRect.begin() + j);
 					j--;
 					r = rmod;
 				}
 			}
 
-			clusterRect.push_back(r);
+			if (Area(r) > 3) {
+				r.tl().x = max(0,r.tl().x-100);
+				r.br().x = r.br().x+100;
+				r.tl().y = max(0,r.tl().y-100);
+				r.br().y = r.br().y+100;
+				r = cv::Rect(cv::Point(max(0,r.tl().x-20),max(0,r.tl().y-20)),cv::Point(r.br().x+20,r.br().y+20));
+				clusterRect.push_back(r);
+			}
 		}
+		printf("COUNT++++++++++++++++++ %i\n", clusterRect.size());
 
 		// Debug purposes: draw bonding rects
 		Mat tmp = Mat::zeros( mImage.size(), CV_8UC3 );
-		for( int i = 0; i< contours.size(); i++ )
+		for( int i = 0; i< clusterRect.size(); i++ )
 		  rectangle( tmp, clusterRect[i].tl(), clusterRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
 
 		IplImage a = tmp;
@@ -127,7 +140,7 @@ void colorTracking() {
 
 		std::vector<cv::Point> rect_tl;
 		std::vector<cv::Point> rect_br;
-		for( int i = 0; i < contours.size(); i++ )
+		for( int i = 0; i < clusterRect.size(); i++ )
 		{
 		    rect_tl.push_back(clusterRect[i].tl());
 		    rect_br.push_back(clusterRect[i].br());
@@ -138,11 +151,10 @@ void colorTracking() {
 		int count = 0;
 		for( int i = 0; i < rect_tl.size(); i++ )
 		{
-
 			int x_distance = abs(rect_tl[i].x - rect_br[i].x);
 			int y_distance = abs(rect_tl[i].y - rect_br[i].y);
 
-			if ( (x_distance > 40) && (y_distance > 40) )
+			if ( (x_distance > 2) && (y_distance > 2) )
 			{
 				count++;
 		    }
@@ -191,16 +203,16 @@ bool Combine(cv::Rect r, cv::Rect r1, cv::Rect r2) {
 	int y1 = r2.tl().y;
 	int y2 = r2.br().y;
 
-	bool a = (x1>x1c && x1<x2c) || (x2>x1c && x2<x2c);
-	bool b = (y1>y1c && y1<y2c) || (y2>y1c && y2<y2c);
-	bool c = (x1c>x1 && x1c<x2) || (x2c>x1 && x2c<x2);
-	bool d = (y1c>y1 && y1c<y2) || (y2c>y1 && y2c<y2);
+	bool a = (x1>=x1c && x1<=x2c) || (x2>=x1c && x2<=x2c);
+	bool b = (y1>=y1c && y1<=y2c) || (y2>=y1c && y2<=y2c);
+	bool c = (x1c>=x1 && x1c<=x2) || (x2c>=x1 && x2c<=x2);
+	bool d = (y1c>=y1 && y1c<=y2) || (y2c>=y1 && y2c<=y2);
 	if ((a&&b)||(c&&d)) {
 		int xb = min(x1,x1c);
 		int xt = max(x2,x2c);
 		int yb = min(y1,y1c);
 		int yt = max(y2,y2c);
-		r = cv::Rect(cv::Point(xb,yb), cv::Point(xt,yt));
+		r = cv::Rect(cv::Point(xt,yt), cv::Point(xb,yb));
 		return true;
 	}
 
