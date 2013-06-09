@@ -9,6 +9,8 @@
 
 using namespace cv;
 
+bool Combine(cv::Rect r, cv::Rect r1, cv::Rect r2);
+
 IplImage* GetThresholdedImage(IplImage* img, CvScalar minHSV, CvScalar maxHSV) {
 	// Convert img to HSV space
 	IplImage* imgHSV = cvCreateImage(cvGetSize(img), 8, 3);
@@ -92,16 +94,31 @@ void colorTracking() {
 		std::vector<std::vector<Point> > contours_poly( contours.size() );
 		std::vector<cv::Rect> boundRect( contours.size() );
 		for( int i = 0; i < contours.size(); i++ )
-		    {
-		        approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
-		        boundRect[i] = boundingRect( Mat(contours_poly[i]) );
-		    }
+		{
+			approxPolyDP( Mat(contours[i]), contours_poly[i], 3, true );
+			boundRect[i] = boundingRect( Mat(contours_poly[i]) );
+		}
 
+		// Cluster the rectangles:
+		std::vector<cv::Rect> clusterRect( contours.size() );
+		for (int i=0; i < boundRect.size(); i++) {
+			cv::Rect r = boundRect[i];
+			for (int j=0; j<clusterRect.size(); j++) {
+				cv::Rect rmod;
+				if (Combine(rmod, r, clusterRect[j])) {
+					clusterRect.erase(clusterRect.begin() + j);
+					j--;
+					r = rmod;
+				}
+			}
+
+			clusterRect.push_back(r);
+		}
 
 		// Debug purposes: draw bonding rects
 		Mat tmp = Mat::zeros( mImage.size(), CV_8UC3 );
 		for( int i = 0; i< contours.size(); i++ )
-		  rectangle( tmp, boundRect[i].tl(), boundRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
+		  rectangle( tmp, clusterRect[i].tl(), clusterRect[i].br(), Scalar(0, 255, 0), 2, 8, 0 );
 
 		IplImage a = tmp;
 		IplImage* b = &a;
@@ -112,8 +129,8 @@ void colorTracking() {
 		std::vector<cv::Point> rect_br;
 		for( int i = 0; i < contours.size(); i++ )
 		{
-		    rect_tl.push_back(boundRect[i].tl());
-		    rect_br.push_back(boundRect[i].br());
+		    rect_tl.push_back(clusterRect[i].tl());
+		    rect_br.push_back(clusterRect[i].br());
 		}
 
 		//cv::Mat drawing = cv::Mat::zeros( red_image.size(), CV_8UC3 );
@@ -160,6 +177,34 @@ void colorTracking() {
 	cvReleaseCapture( &capture );
 	cvDestroyWindow( "mywindow" );
 
+}
+
+bool Combine(cv::Rect r, cv::Rect r1, cv::Rect r2) {
+
+	int x1c = r1.tl().x;
+	int x2c = r1.br().x;
+	int y1c = r1.tl().y;
+	int y2c = r1.br().y;
+
+	int x1 = r2.tl().x;
+	int x2 = r2.br().x;
+	int y1 = r2.tl().y;
+	int y2 = r2.br().y;
+
+	bool a = (x1>x1c && x1<x2c) || (x2>x1c && x2<x2c);
+	bool b = (y1>y1c && y1<y2c) || (y2>y1c && y2<y2c);
+	bool c = (x1c>x1 && x1c<x2) || (x2c>x1 && x2c<x2);
+	bool d = (y1c>y1 && y1c<y2) || (y2c>y1 && y2c<y2);
+	if ((a&&b)||(c&&d)) {
+		int xb = min(x1,x1c);
+		int xt = max(x2,x2c);
+		int yb = min(y1,y1c);
+		int yt = max(y2,y2c);
+		r = cv::Rect(cv::Point(xb,yb), cv::Point(xt,yt));
+		return true;
+	}
+
+	return false;
 }
 
 void circleTracking() {
